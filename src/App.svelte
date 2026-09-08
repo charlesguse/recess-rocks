@@ -114,14 +114,15 @@
   // The shell's second DOM pass (FR-016b, data-model.md's Shell Wiring) — a
   // hidden readout probe pinned to computeReadoutWidthCap's own result, with
   // no nowrap, so its real wrapped height at exactly that width can be read
-  // back as readoutHeightAtCapWidth below.
+  // back as readoutHeightAtCapWidth below. That width is written imperatively
+  // by the measurement $effect, never bound in the template (#47).
   let readoutCappedProbeEl: HTMLDivElement | undefined = $state();
   let muteProbeEl: HTMLButtonElement | undefined = $state();
   let themeRowProbeEl: HTMLDivElement | undefined = $state();
   let themeCollapsedProbeEl: HTMLButtonElement | undefined = $state();
   // Bumped alongside insetBox on resize/orientationchange so the probes are
   // re-measured on the same triggers, in addition to the natural reactivity
-  // of reading hudText/theme.displayName below.
+  // of reading hudText/theme.displayName/muted below.
   let topStripProbeTick = $state(0);
 
   // FR-016, FR-043: device creation happens only inside these existing
@@ -332,58 +333,89 @@
     return [stars, time, score, lives].filter((part) => part !== undefined).join(' — ');
   });
 
-  // Natural sizes measured from the hidden top-strip probes (research.md's
-  // "always-mounted, visually-hidden probe" decision) — re-measured on the
-  // same resize/orientationchange listeners as insetBox (topStripProbeTick),
-  // and whenever hudText or the active theme's label changes (both read
-  // below, giving this its own reactive dependency on each).
-  let topStripSizes: TopStripOccupantSizes | undefined = $derived.by(() => {
+  // Both of the shell's DOM measurement passes (FR-016b's fixed two: natural
+  // sizes, then the readout's height at its capped width) live in this one
+  // $effect, and the invariant that makes it correct is:
+  //
+  //   every getBoundingClientRect() below reads the DOM generation that
+  //   reflects the same hudText / theme.displayName / muted values this
+  //   effect's own dependency graph is keyed on — and the capped probe's
+  //   width is written on the line above the line that reads its height.
+  //
+  // Neither half of that holds for a render-phase $derived.by (#47). A
+  // $derived tracking hudText but reading readoutProbeEl.getBoundingClientRect()
+  // measures the *previous* generation's probe: Svelte creates the block that
+  // consumes it before the trailing template_effect that writes the probe's
+  // text, so on entry to 'playing' — previous generation 'caveIntro', where
+  // hudText is undefined and the probe renders empty — it measured a
+  // padding-only 19.1875px box, sized the readout to that, and clipped ~90%
+  // of the text with capped === false and so no aria-label (violates FR-011).
+  // An $effect is documented to run only after the DOM has been updated, so
+  // pass 1 here always sees the current text.
+  //
+  // The two passes are merged rather than split across two $effects for the
+  // second half of the invariant. Splitting them re-opens exactly the race
+  // T023 closed: a write to topStripSizes marks a later $effect dirty, and
+  // Svelte runs that effect in the *same* flush iteration — before the
+  // template effect binding the capped probe's width gets its turn — so the
+  // height pass reads the new text at the previous cap's width. Verified
+  // against svelte 5.57.0. Setting style.width imperatively and reading the
+  // rect back on the next line removes the scheduler from that ordering
+  // entirely: getBoundingClientRect() forces the pending reflow itself.
+  //
+  // Six trigger inputs, all read up front below, and each one a value some
+  // probe renders or some cap depends on: topStripProbeTick (resize/
+  // orientation), hudText, theme.displayName, muted, insetBox, and
+  // touchLayout's reservedRects (which flip via controlsVisible/
+  // lastInputSource/session.screen). A future change adding a seventh must
+  // extend this list — it is the obligation, not a call-site convention.
+  //
+  // Merging means pass 1 also re-runs on a reservedRects flip, where before
+  // only pass 2 did. Natural sizes do not depend on reservedRects, so the
+  // result is identical; the cost is four extra rect reads on a user gesture,
+  // and it is the price of keeping the two passes in one ordered function.
+  //
+  // Still exactly two rect passes per trigger. Nothing here runs per frame or
+  // per simulation tick.
+  let topStripSizes: TopStripOccupantSizes | undefined = $state(undefined);
+  let readoutHeightAtCapWidth: number | undefined = $state(undefined);
+  $effect(() => {
     topStripProbeTick;
-    // theme.displayName is what themeCollapsedProbeEl renders below; reading
-    // it here keeps this measurement in step with a theme switch too.
+    const text = hudText;
     void theme.displayName;
-    if (!muteProbeEl || !themeRowProbeEl || !themeCollapsedProbeEl) return undefined;
+    void muted;
+    const box = insetBox;
+    const reservedRects = touchLayout?.reservedRects ?? [];
+
+    if (!muteProbeEl || !themeRowProbeEl || !themeCollapsedProbeEl) {
+      topStripSizes = undefined;
+      readoutHeightAtCapWidth = undefined;
+      return;
+    }
     const toSize = (el: Element): Size => {
       const rect = el.getBoundingClientRect();
       return { width: rect.width, height: rect.height };
     };
-    const readout = hudText !== undefined && readoutProbeEl ? toSize(readoutProbeEl) : undefined;
+
+    // Pass 1 — natural (nowrap) sizes.
+    const readout = text !== undefined && readoutProbeEl ? toSize(readoutProbeEl) : undefined;
     const themePicker =
       listThemes().length > 1 ? { expanded: toSize(themeRowProbeEl), collapsed: toSize(themeCollapsedProbeEl) } : undefined;
-    return { readout, muteButton: toSize(muteProbeEl), themePicker };
-  });
+    const sizes: TopStripOccupantSizes = { readout, muteButton: toSize(muteProbeEl), themePicker };
 
-  // The width computeTopStripLayout will give the readout, computed with no
-  // knowledge of its height (FR-016a) — feeds the capped-width probe's
-  // inline width below, the shell's first of two DOM passes for the readout.
-  let readoutWidthCap = $derived.by(() => {
-    if (!insetBox || !topStripSizes) return undefined;
-    return computeReadoutWidthCap(insetBox, touchLayout?.reservedRects ?? [], topStripSizes);
-  });
+    // Pass 2 — the readout's real wrapped height at exactly the width
+    // computeTopStripLayout will give it (FR-016a: the cap is a function of
+    // the allowance and natural sizes only, never of an achieved height).
+    // Skipped until insetBox exists; computeTopStripLayout's documented
+    // fallback to the natural single-line height covers that window.
+    let heightAtCapWidth: number | undefined;
+    if (text !== undefined && box && readoutCappedProbeEl) {
+      readoutCappedProbeEl.style.width = `${computeReadoutWidthCap(box, reservedRects, sizes)}px`;
+      heightAtCapWidth = readoutCappedProbeEl.getBoundingClientRect().height;
+    }
 
-  // The shell's second-pass measurement (FR-016b): the readout's real
-  // wrapped height at exactly readoutWidthCap. Must re-run on every input
-  // that can change that cap width, or a stale height reaches
-  // computeTopStripLayout while -webkit-line-clamp silently cuts the text
-  // with no indication (FR-011). Four trigger inputs, all read below or via
-  // readoutWidthCap's own dependencies: insetBox, touchLayout/reservedRects
-  // (flips via controlsVisible/lastInputSource/session.screen), hudText, and
-  // theme.displayName. A future change adding a fifth cap input must extend
-  // this list, not rely on call-site convention.
-  //
-  // This is an $effect rather than a $derived: $effect is documented to run
-  // only after the DOM has been updated, so by the time it reads
-  // getBoundingClientRect() the probe's width style (also driven by
-  // readoutWidthCap) is guaranteed to already reflect the new value — a
-  // $derived reading readoutWidthCap directly would race the same DOM
-  // update with no such guarantee.
-  let readoutHeightAtCapWidth: number | undefined = $state(undefined);
-  $effect(() => {
-    topStripProbeTick;
-    void theme.displayName;
-    void readoutWidthCap;
-    readoutHeightAtCapWidth =
-      hudText === undefined || !readoutCappedProbeEl ? undefined : readoutCappedProbeEl.getBoundingClientRect().height;
+    topStripSizes = sizes;
+    readoutHeightAtCapWidth = heightAtCapWidth;
   });
 
   // FR-017: recomputed only when insetBox, the touch layout's reservedRects,
@@ -493,13 +525,11 @@
 </div>
 <!-- The capped-width probe (T010, FR-016b): same styling, no nowrap, pinned
      to the exact width computeReadoutWidthCap gives the readout, so its
-     real wrapped height at that width can be read back below. -->
-<div
-  bind:this={readoutCappedProbeEl}
-  class="readout top-strip-probe"
-  style="width:{readoutWidthCap ?? 0}px;"
-  aria-hidden="true"
->
+     real wrapped height at that width can be read back above. Its width is
+     set imperatively by the measurement $effect immediately before that read
+     — deliberately not a template binding, so the write cannot be scheduled
+     after the read (#47). Do not reintroduce a style="width:..." here. -->
+<div bind:this={readoutCappedProbeEl} class="readout top-strip-probe" aria-hidden="true">
   {hudText ?? ''}
 </div>
 <button bind:this={muteProbeEl} type="button" class="mute-button top-strip-probe" aria-hidden="true" tabindex="-1">
