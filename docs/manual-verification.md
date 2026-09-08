@@ -62,6 +62,43 @@ dark background — no white text directly on the cave, at any width down to
 top-strip markup/CSS or `src/lib/layout/topStrip.ts`, not just once at this
 spec's review.
 
+**Run 2026-09-07, by Claude at the maintainer's request, against `main` at
+`220ba67` — emulated Chrome viewports, not a real device: portrait pass,
+landscape fail ([#47](https://github.com/charlesguse/whatever/issues/47)).**
+
+This is an *emulated* run and does not discharge the on-device obligation
+above — the standing check still wants a real narrow phone, in both
+orientations. What emulation can reach is the layout arithmetic, and that is
+what was exercised here, with the longest readout the game produces
+(`0 / 4 Gold Stars — Time: 120 — Score: 0 — Lives: 3`; Classroom is the longer
+of the two themes, so Classic is strictly shorter).
+
+| Viewport | Result |
+| --- | --- |
+| 320x690 portrait | pass — readout wraps to 4 lines inside its box, 0px clipped, no overlap with mute or picker, nothing outside the viewport |
+| 360x740 portrait | pass — same, 0px clipped |
+| 690x320 landscape | **fail** — readout given `width: 19.1875px`, `scrollHeight` 260 in a `clientHeight` 26 box: 234px of text clipped |
+| 740x360 landscape | **fail** — identical, 234px clipped |
+
+`-webkit-line-clamp` resolved to a finite value (`8`) in every case, so 013's
+T025 guard is confirmed live in a browser and not just in the node suite.
+
+**Landscape detail.** On a fresh load at a landscape viewport, entering
+`playing` sizes the visible readout from a different width cap than the
+second measurement probe in the same frame — the probe carries
+`width: 449.438px` while the visible box gets `width: 19.1875px`, with ~63px
+of unused space to its right. About 90% of the readout is clipped away, and
+the strip renders as a sliver reading `0`. It repairs itself roughly a second
+later, but only because the clock ticks `120 -> 119` and `hudText` changing
+re-triggers the measurement. Pause before that first tick and `hudText` is
+frozen, so it stays 90% clipped for the whole pause (still broken at 5s).
+Portrait and the title screen are unaffected.
+
+This is the same width/height-mismatch class 013's T023 fold addressed, via a
+different trigger: T023 fixed the `reservedRects` path, this one is the
+transition into `playing`. It is the FR-011 failure — a value hidden with no
+indication — which is why it is logged as a fail rather than a cosmetic note.
+
 ---
 
 ## 008 — Synthesized sound, per theme, always mutable
