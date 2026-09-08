@@ -63,8 +63,8 @@ top-strip markup/CSS or `src/lib/layout/topStrip.ts`, not just once at this
 spec's review.
 
 **Run 2026-09-07, by Claude at the maintainer's request, against `main` at
-`220ba67` — emulated Chrome viewports, not a real device: portrait pass,
-landscape fail ([#47](https://github.com/charlesguse/whatever/issues/47)).**
+`220ba67` — emulated Chrome viewports, not a real device: fail at every width
+tried, both orientations ([#47](https://github.com/charlesguse/whatever/issues/47)).**
 
 This is an *emulated* run and does not discharge the on-device obligation
 above — the standing check still wants a real narrow phone, in both
@@ -75,29 +75,42 @@ of the two themes, so Classic is strictly shorter).
 
 | Viewport | Result |
 | --- | --- |
-| 320x690 portrait | pass — readout wraps to 4 lines inside its box, 0px clipped, no overlap with mute or picker, nothing outside the viewport |
-| 360x740 portrait | pass — same, 0px clipped |
-| 690x320 landscape | **fail** — readout given `width: 19.1875px`, `scrollHeight` 260 in a `clientHeight` 26 box: 234px of text clipped |
-| 740x360 landscape | **fail** — identical, 234px clipped |
+| 320x690 portrait | **fail** — 234px of a 260px `scrollHeight` clipped on cave start |
+| 360x740 portrait | **fail** — same mechanism |
+| 690x320 landscape | **fail** — 234px clipped, renders as a sliver reading `0` |
+| 740x360 landscape | **fail** — same |
 
-`-webkit-line-clamp` resolved to a finite value (`8`) in every case, so 013's
-T025 guard is confirmed live in a browser and not just in the node suite.
+`-webkit-line-clamp` resolved to a finite value in every case, so 013's T025
+guard is confirmed live in a browser and not just in the node suite. 013's
+*containment* guarantee also holds throughout — no text renders outside the
+dark box, which is what this standing check literally asks about. The failure
+is the other half of the same requirement: the text is contained by being
+**hidden**, with `capped === false` so no `aria-label` is set. FR-011 calls
+that out specifically, which is why this is logged as a fail and not a pass
+with a note.
 
-**Landscape detail.** On a fresh load at a landscape viewport, entering
-`playing` sizes the visible readout from a different width cap than the
-second measurement probe in the same frame — the probe carries
-`width: 449.438px` while the visible box gets `width: 19.1875px`, with ~63px
-of unused space to its right. About 90% of the readout is clipped away, and
-the strip renders as a sliver reading `0`. It repairs itself roughly a second
-later, but only because the clock ticks `120 -> 119` and `hudText` changing
-re-triggers the measurement. Pause before that first tick and `hudText` is
-frozen, so it stays 90% clipped for the whole pause (still broken at 5s).
-Portrait and the title screen are unaffected.
+**Mechanism.** `topStripSizes` (`src/App.svelte:340-354`) is a render-phase
+`$derived.by` that tracks the JS value of `hudText` but measures the DOM's
+reflection of it, and the compiler schedules that write after this read. On
+cave start the previous generation is `caveIntro`, where `hudText` is
+undefined and the probe is empty, so the measured size is padding-only
+(`19.1875 x 8` — exactly `2 x 0.6rem`, a zero-width content box). Every token
+then wraps to its own line: 14 tokens x 18px + 8 = the 260px `scrollHeight`
+seen in both orientations. It repairs on the next `hudText` change — the clock
+ticking `120 -> 119` — so it is invisible during normal play, but pausing
+before that first tick freezes `hudText` and it stays clipped for the whole
+pause.
 
-This is the same width/height-mismatch class 013's T023 fold addressed, via a
-different trigger: T023 fixed the `reservedRects` path, this one is the
-transition into `playing`. It is the FR-011 failure — a value hidden with no
-indication — which is why it is logged as a fail rather than a cosmetic note.
+**Correction.** An earlier draft of this entry recorded portrait as passing.
+That was a sampling error — the portrait measurements were taken after the
+one-second self-heal. Frame-level tracing at 320x690 captures the broken state
+directly, and calling `computeTopStripLayout` with the poisoned natural size
+returns `width = 19.1875, capped = false` in both orientations. The defect has
+no orientation dependence; only the shape of the wreckage differs.
+
+This is the same width/height-mismatch class 013's T023 fold addressed, one
+level upstream: T023 fixed the second measurement pass, while the first pass
+still measures a stale DOM generation.
 
 ---
 
