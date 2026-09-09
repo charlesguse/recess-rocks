@@ -112,6 +112,62 @@ This is the same width/height-mismatch class 013's T023 fold addressed, one
 level upstream: T023 fixed the second measurement pass, while the first pass
 still measures a stale DOM generation.
 
+**Re-run 2026-09-08, by Claude at the maintainer's request, against `main` at
+`72627d5` — emulated Chrome viewports, not a real device: pass at every width
+tried, both orientations.** This is the re-run the standing check's own rule
+asks for: [#49](https://github.com/charlesguse/whatever/pull/49) changed
+`src/App.svelte`'s top-strip measurement, so the check is due again. It also
+discharges the four browser checks #49's description listed as "NOT verified
+in a browser — please check before merging", which merged without them.
+
+Served the built single-file `dist/index.html` over `vite preview` (a real
+origin, so `localStorage` behaves), Classroom theme — the longer of the two —
+with the longest readout the game produces
+(`0 / 4 Gold Stars — Time: 120 — Score: 0 — Lives: 3`).
+
+The previous entry's sampling error is the thing this run had to avoid: the
+defect self-heals about a second after cave start, so any measurement taken
+after a tool round-trip reads the healed state. Instead a `requestAnimationFrame`
+recorder was installed *before* the cave started, and it dispatched the pause
+key on the very first frame `Time: 120` appeared — #49's check 2, the case
+that never self-repaired. Every frame of the resulting multi-second pause was
+sampled.
+
+| Viewport | Readout width | `capped` / `aria-label` | `-webkit-line-clamp` | Frames sampled | Result |
+| --- | --- | --- | --- | --- | --- |
+| 320x690 portrait | 152.63 | capped, label set | 8 | 759 | **pass** |
+| 360x740 portrait | 192.63 | capped, label set | 9 | 834 | **pass** |
+| 690x320 landscape | 390.02 | not capped, no label | 4 | 877 | **pass** |
+| 740x360 landscape | 390.02 | not capped, no label | 4 | 850 | **pass** |
+
+Every sampled frame at a given viewport reported an identical width — the
+poisoned `19.1875` appears nowhere, and there is no longer a width *change* at
+the `120 -> 119` tick, which is what the self-heal used to look like. These are
+exactly the "healthy" rows [#47](https://github.com/charlesguse/whatever/issues/47)
+predicted for both orientations. `capped` tracks reality in both directions:
+where the readout is capped the `aria-label` is present, and where it is not
+capped (`scrollWidth === clientWidth`, nothing hidden) no label is set, which
+is what FR-011 asks for. `-webkit-line-clamp` resolved finite everywhere,
+re-confirming T025 live.
+
+At each viewport all three occupants — readout, mute, theme picker — sat fully
+inside the viewport, each on its own `rgba(0, 0, 0, 0.55)` background, with no
+overlap and `scrollWidth`/`scrollHeight` equal to their client box (nothing
+clipped and nothing spilling). The picker was collapsed in portrait and
+expanded in landscape, as [#47](https://github.com/charlesguse/whatever/issues/47)
+predicted for a healthy first frame.
+
+#49's remaining two checks, run mid-pause at 320x690: switching theme
+(Classroom -> Classic) resized the readout `152.63 -> 175.05` in exactly one
+recorded step with the picker staying collapsed throughout — no flicker — and
+toggling mute changed the glyph with every measured rect unchanged, so no
+layout jump.
+
+**This does not discharge the on-device obligation.** It is still emulation,
+and the standing check still wants a real narrow phone in both orientations;
+the maintainer's Pixel 10 Pro at 412px cannot reach the sub-380px band this
+covers.
+
 ---
 
 ## 008 — Synthesized sound, per theme, always mutable
