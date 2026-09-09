@@ -140,11 +140,15 @@ sampled.
 | 690x320 landscape | 390.02 | not capped, no label | 4 | 877 | **pass** |
 | 740x360 landscape | 390.02 | not capped, no label | 4 | 850 | **pass** |
 
-Every sampled frame at a given viewport reported an identical width — the
-poisoned `19.1875` appears nowhere, and there is no longer a width *change* at
-the `120 -> 119` tick, which is what the self-heal used to look like. These are
-exactly the "healthy" rows [#47](https://github.com/charlesguse/whatever/issues/47)
-predicted for both orientations. `capped` tracks reality in both directions:
+Every sampled frame at a given viewport reported an identical width, and the
+poisoned `19.1875` appears in none of them. Because the pause landed on the
+first `Time: 120` frame, the width held for the whole pause — pre-fix that is
+the case that never self-repaired, so it stayed at `19.1875` indefinitely. (In
+a separate un-paused run at 320x690 the clock was watched across `120 -> 119`
+and the width did not change there either; the paused runs never reach 119.)
+These are exactly the "healthy" rows
+[#47](https://github.com/charlesguse/whatever/issues/47) predicted for both
+orientations. `capped` tracks reality in both directions:
 where the readout is capped the `aria-label` is present, and where it is not
 capped (`scrollWidth === clientWidth`, nothing hidden) no label is set, which
 is what FR-011 asks for. `-webkit-line-clamp` resolved finite everywhere,
@@ -162,6 +166,31 @@ predicted for a healthy first frame.
 recorded step with the picker staying collapsed throughout — no flicker — and
 toggling mute changed the glyph with every measured rect unchanged, so no
 layout jump.
+
+**Configuration — and the one branch this run did not reach.** The cave was
+started and paused from the keyboard, so `lastInputSource` was `keyboard`,
+`controlsVisible` was false, and `touchLayout` was undefined: every
+measurement above is the **touch-controls-hidden** branch, with
+`reservedRects` empty. On a real phone the tap that starts the cave makes the
+controls appear and `reservedRects` is non-empty from then on. Feeding the
+same measured natural sizes through `computeTouchControlLayout` and
+`computeTopStripLayout` directly shows portrait is unaffected but landscape is
+not:
+
+| Viewport | Controls hidden | Controls visible |
+| --- | --- | --- |
+| 320x690 portrait | 152.63, capped, collapsed | *identical* — 1 reserved rect, no intrusion |
+| 360x740 portrait | 192.63, capped, collapsed | *identical* |
+| 690x320 landscape | 390.02, not capped, picker expanded | **157.13, capped, picker collapsed** |
+| 740x360 landscape | 390.02, not capped, picker expanded | **196.63, capped, picker collapsed** |
+
+The controls-visible landscape layout is still contained and still finite
+(`maxLines` 4, rect inside the viewport, `capped` true so the `aria-label` is
+set), but it is arithmetic only — it has **not** been run live, because the
+browser pane stopped producing frames before that run could be made. Since
+#49's merged effect re-runs pass 1 on a `reservedRects` flip, that flip is
+worth exercising live. **Outstanding: a live landscape run with the touch
+controls up**, started and paused by tapping rather than by key.
 
 **This does not discharge the on-device obligation.** It is still emulation,
 and the standing check still wants a real narrow phone in both orientations;
