@@ -5,7 +5,7 @@ the *Super Boulder Dash* mechanics two brothers played on a school computer —
 rethemed as an elementary school. Dig through notebook paper, dodge falling
 erasers, collect gold stars, and get out the classroom door before the bell.
 
-**Play it:** https://charlesguse.github.io/whatever/ — or download that single
+**Play it:** https://charlesguse.github.io/recess-rocks/ — or download that single
 page and double-click it; it runs straight from disk, no server needed.
 
 ## The game
