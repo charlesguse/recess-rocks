@@ -64,7 +64,7 @@ spec's review.
 
 **Run 2026-09-07, by Claude at the maintainer's request, against `main` at
 `220ba67` — emulated Chrome viewports, not a real device: fail at every width
-tried, both orientations ([#47](https://github.com/charlesguse/whatever/issues/47)).**
+tried, both orientations ([#47](https://github.com/charlesguse/recess-rocks/issues/47)).**
 
 This is an *emulated* run and does not discharge the on-device obligation
 above — the standing check still wants a real narrow phone, in both
@@ -115,7 +115,7 @@ still measures a stale DOM generation.
 **Re-run 2026-09-08, by Claude at the maintainer's request, against `main` at
 `72627d5` — emulated Chrome viewports, not a real device: pass at every width
 tried, both orientations.** This is the re-run the standing check's own rule
-asks for: [#49](https://github.com/charlesguse/whatever/pull/49) changed
+asks for: [#49](https://github.com/charlesguse/recess-rocks/pull/49) changed
 `src/App.svelte`'s top-strip measurement, so the check is due again. It also
 discharges the four browser checks #49's description listed as "NOT verified
 in a browser — please check before merging", which merged without them.
@@ -147,7 +147,7 @@ the case that never self-repaired, so it stayed at `19.1875` indefinitely. (In
 a separate un-paused run at 320x690 the clock was watched across `120 -> 119`
 and the width did not change there either; the paused runs never reach 119.)
 These are exactly the "healthy" rows
-[#47](https://github.com/charlesguse/whatever/issues/47) predicted for both
+[#47](https://github.com/charlesguse/recess-rocks/issues/47) predicted for both
 orientations. `capped` tracks reality in both directions:
 where the readout is capped the `aria-label` is present, and where it is not
 capped (`scrollWidth === clientWidth`, nothing hidden) no label is set, which
@@ -158,7 +158,7 @@ At each viewport all three occupants — readout, mute, theme picker — sat ful
 inside the viewport, each on its own `rgba(0, 0, 0, 0.55)` background, with no
 overlap and `scrollWidth`/`scrollHeight` equal to their client box (nothing
 clipped and nothing spilling). The picker was collapsed in portrait and
-expanded in landscape, as [#47](https://github.com/charlesguse/whatever/issues/47)
+expanded in landscape, as [#47](https://github.com/charlesguse/recess-rocks/issues/47)
 predicted for a healthy first frame.
 
 #49's remaining two checks, run mid-pause at 320x690: switching theme
@@ -219,7 +219,7 @@ for" (13 items).
 | 8 | Mute (instant, persists, unmute) | pass |
 | 9 | Theme switch mid-cave | pass |
 | 10 | iOS Safari first-tap unlock | blocked — needs an iOS device |
-| 11 | Backgrounded tab | **fail** — [#26](https://github.com/charlesguse/whatever/issues/26) |
+| 11 | Backgrounded tab | **fail** — [#26](https://github.com/charlesguse/recess-rocks/issues/26) |
 | 12 | Controller only | blocked — needs the controller |
 | 13 | Off-camera events | pass |
 
@@ -272,7 +272,7 @@ Tablet/phone, in the order the notes list them:
 | Finishable title-to-win without a keyboard | partial — works so far, game not yet completed |
 
 **Found during this pass:** tapping the on-screen controls on a keyboard-less
-device hides them — [#31](https://github.com/charlesguse/whatever/issues/31).
+device hides them — [#31](https://github.com/charlesguse/recess-rocks/issues/31).
 A tap's browser-synthesized `click` is treated as a mouse click, which flips
 `lastInputSource` to `discrete` and fails `shouldShowTouchControls`. The pure
 reducer in `visibility.ts` is correct; the call site feeds it a synthesized
@@ -280,7 +280,7 @@ click it cannot distinguish from a real one.
 
 **Also found during this pass:** at phone width the HUD readout, the mute
 button, and the theme picker overlap each other —
-[#35](https://github.com/charlesguse/whatever/issues/35), reported on Chrome on
+[#35](https://github.com/charlesguse/recess-rocks/issues/35), reported on Chrome on
 a Pixel 10 Pro. All three are `position: fixed` at `top: 0.5rem` — pinned left,
 centred at `left: 50%`, and pinned right — with nothing measuring between them.
 The mute button's own comment asserts it sits "clear of the HUD readout

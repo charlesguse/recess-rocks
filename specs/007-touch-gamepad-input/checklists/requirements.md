@@ -32,7 +32,7 @@
 ## Notes
 
 - **All three clarifications are resolved.** They were posted on issue #7 and
-  [answered there](https://github.com/charlesguse/whatever/issues/7#issuecomment-5480274021)
+  [answered there](https://github.com/charlesguse/recess-rocks/issues/7#issuecomment-5480274021)
   with **B, A, B**. No [NEEDS CLARIFICATION] marker remains, and each answer is
   folded into the requirements, scenarios, success criteria, and Maintainer
   Review Notes rather than only recorded here:
